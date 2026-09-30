@@ -851,24 +851,28 @@ class Store {
 
     // 4. Search Cloud Firestore Database
     if (!house) {
-      const fetched = await dbFetchHouseByCode(cleanCode);
-      if (fetched) {
-        house = fetched;
-        if (!db.houses.some((h) => h.id === house.id)) {
-          db.houses.push(house);
+      try {
+        const fetched = await dbFetchHouseByCode(cleanCode);
+        if (fetched) {
+          house = fetched;
+          if (!db.houses.some((h) => h.id === house.id)) {
+            db.houses.push(house);
+          }
+          const houseData = await dbFetchHouseData(house.id);
+          if (houseData) {
+            (houseData.members || []).forEach((m) => {
+              if (!db.house_members.some((hm) => hm.id === m.id)) db.house_members.push(m);
+            });
+            (houseData.chores || []).forEach((c) => {
+              if (!db.chores.some((ch) => ch.id === c.id)) db.chores.push(c);
+            });
+            (houseData.assignments || []).forEach((a) => {
+              if (!db.assignments.some((as) => as.id === a.id)) db.assignments.push(a);
+            });
+          }
         }
-        const houseData = await dbFetchHouseData(house.id);
-        if (houseData) {
-          (houseData.members || []).forEach((m) => {
-            if (!db.house_members.some((hm) => hm.id === m.id)) db.house_members.push(m);
-          });
-          (houseData.chores || []).forEach((c) => {
-            if (!db.chores.some((ch) => ch.id === c.id)) db.chores.push(c);
-          });
-          (houseData.assignments || []).forEach((a) => {
-            if (!db.assignments.some((as) => as.id === a.id)) db.assignments.push(a);
-          });
-        }
+      } catch (err) {
+        console.warn('[House Lookup] Firestore fallback failed, continuing without cloud results.', err.message);
       }
     }
 

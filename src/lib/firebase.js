@@ -633,27 +633,42 @@ export function subscribeToUserNotifications(userId, callback) {
   );
 }
 
+export function isFirestorePermissionError(err) {
+  if (!err) return false;
+  const code = String(err.code || err.name || '').toLowerCase();
+  const message = String(err.message || '').toLowerCase();
+  return code.includes('permission') || code.includes('missing') || message.includes('permission') || message.includes('missing or insufficient permissions');
+}
+
 export async function dbFetchHouseByCode(code) {
   if (!code || !isFirebaseConfigured()) return null;
   const cleanCode = code.trim().toUpperCase();
 
   try {
     const housesRef = collection(db, 'houses');
-    const q = query(housesRef, where('inviteCode', '==', cleanCode));
-    const querySnapshot = await getDocs(q);
+    const fieldsToTry = ['inviteCode', 'invite_code'];
 
-    if (!querySnapshot.empty) {
-      const docSnap = querySnapshot.docs[0];
-      const data = docSnap.data();
-      return {
-        id: data.id,
-        name: data.name,
-        invite_code: data.inviteCode,
-        created_by: data.createdBy,
-        created_at: data.createdAt,
-      };
+    for (const fieldName of fieldsToTry) {
+      const q = query(housesRef, where(fieldName, '==', cleanCode));
+      const querySnapshot = await getDocs(q);
+
+      if (!querySnapshot.empty) {
+        const docSnap = querySnapshot.docs[0];
+        const data = docSnap.data();
+        return {
+          id: data.id,
+          name: data.name,
+          invite_code: data.inviteCode || data.invite_code,
+          created_by: data.createdBy || data.created_by,
+          created_at: data.createdAt || data.created_at,
+        };
+      }
     }
   } catch (err) {
+    if (isFirestorePermissionError(err)) {
+      console.warn('[Firestore Warning] House lookup permission denied; falling back to local/server data.', err.message);
+      return null;
+    }
     console.error('[Firestore Error] Fetch house by code failed:', err.message);
     throw new Error(`Firestore error looking up house code "${cleanCode}": ${err.message}`);
   }
@@ -726,6 +741,10 @@ export async function dbFetchHouseData(houseId) {
       attentionRequests,
     };
   } catch (err) {
+    if (isFirestorePermissionError(err)) {
+      console.warn('[Firestore Warning] House data fetch permission denied; continuing without cloud data.', err.message);
+      return null;
+    }
     console.error(`[FIRESTORE HOUSE DATA ERROR] dbFetchHouseData failed for houseId "${houseId}":`, err);
     throw err;
   }

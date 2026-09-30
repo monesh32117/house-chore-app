@@ -302,7 +302,10 @@ export default function Home() {
       showToast({ type: 'success', message: 'Joined house successfully!' });
       setActiveTab('dashboard');
     } catch (err) {
-      setModalError(err.message);
+      const message = (err?.message || '').toLowerCase().includes('permission')
+        ? 'We could not verify that house code with the current access settings.'
+        : err?.message || 'Failed to join house.';
+      setModalError(message);
     }
   };
 
